@@ -57,7 +57,7 @@ struct WorkBook
 //global params
 long double objectDistance = 0;
 long double bearing = 0;
-int objectType = 1; 
+int objectType = 2; 
 
 
 /***********************************************************************
@@ -382,9 +382,11 @@ int main()
     }
     else
     {
-        objectCordinates[0] = (39.1387837 * (3.1415926535 / 180));
-        objectCordinates[1] = (-84.5131423 * (3.1415926535 / 180));
+        objectCordinates[0] = (39.130597 * (3.1415926535 / 180));
+        objectCordinates[1] = (-84.512752 * (3.1415926535 / 180));
     }
+
+    //39.130597, -84.512752
 
     vector<long double> previousCordinates;
     vector<long double> previousObjectCordinates;
@@ -398,7 +400,7 @@ int main()
         if(skip == 0)
         {
             parseExifToXml(fileName, worksheet, objectCordinates, row, previousCordinates, previousImage, previousObjectCordinates);
-            skip = 10;
+            skip = 0;
             continue;
         }
         //cout << "\n Skipping: "<<fileName;
