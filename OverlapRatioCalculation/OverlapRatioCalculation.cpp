@@ -57,8 +57,21 @@ struct WorkBook
 //global params
 long double objectDistance = 0;
 long double bearing = 0;
-int objectType = 2; 
-
+int objectType = 1; 
+//1: straight path
+//2: circular path
+vector<long double> oldValues(8, 0);
+/*values in this vector:
+vector<long double> oldValues(7, 0);
+setValues = 0 : default
+lastFOV
+lat1
+long1
+old bearing
+average OR
+average BR
+count
+*/
 
 /***********************************************************************
 Function: calculateInitialBearingDistance()
@@ -96,11 +109,11 @@ void calculateInitialBearingDistance(long double &objectDistance, long double &b
     long double y = sin(long2 - long1) * cos(lat2);
     long double x = cos(lat1) * sin(lat2) - (sin(lat1) * cos(lat2) * cos(long2 - long1));
     bearing = atan2(y, x);
-    cout << "\n bearing = " << bearing;
+    //cout << "\n bearing = " << bearing;
     bearing = bearing * (180 / PI);
     bearing = fmod(bearing+360, 360);
     bearing = bearing * (PI / 180);
-    cout << " \n changed bearing = " << bearing;
+    //cout << " \n changed bearing = " << bearing;
 }
 
 /*******************************************************************
@@ -118,9 +131,9 @@ void calculateObjectCordinates(vector<long double>& objectCordinates, vector<lon
     lat1 = cameraCordinates[0] * (PI / 180);
     long1 = cameraCordinates[1] * (PI / 180);
     int radius = 6371; // Km
-    cout << "\n objectDistance = " << objectDistance;
-    cout << " \n bearing = " << bearing;
-    cout << " \n lat1: " << cameraCordinates[0] << " long1: " << cameraCordinates[1];
+    //cout << "\n objectDistance = " << objectDistance;
+    //cout << " \n bearing = " << bearing;
+    //cout << " \n lat1: " << cameraCordinates[0] << " long1: " << cameraCordinates[1];
     
     lat2 = asin(sin(lat1) * cos(objectDistance / radius) + cos(lat1) * sin(objectDistance / radius) * cos(bearing));
     long2 = long1 + atan2(sin(bearing) * sin(objectDistance / radius) * cos(lat1), cos(objectDistance / radius) - sin(lat1) * sin(lat2));
@@ -130,8 +143,8 @@ void calculateObjectCordinates(vector<long double>& objectCordinates, vector<lon
 
     lat2 = lat2 * (180 / PI);
     long2 = long2 * (180 / PI);
-    cout << std::fixed <<"\n lat2: " << lat2 << " |  long 2 :" << long2;
-    cout<<std::fixed<< "\n lat2: " << lat2 * (PI / 180) << " |  long 2 :" << long2 * (PI / 180);
+    //cout << std::fixed <<"\n lat2: " << lat2 << " |  long 2 :" << long2;
+    //cout<<std::fixed<< "\n lat2: " << lat2 * (PI / 180) << " |  long 2 :" << long2 * (PI / 180);
     
 }
 
@@ -147,49 +160,167 @@ void writeToXls(lxw_worksheet* worksheet, vector<long double>& objectCordinates,
     const char* cstr = imageName.c_str();
 
     int column = 0;
-    cout << std::fixed << "\n lat2: " << objectCordinates[0] << " |  long 2 :" << objectCordinates[1];
-    cout << "\n ------------ ";
-    worksheet_write_number(worksheet, row, column++, objectCordinates[0], NULL);
-    worksheet_write_number(worksheet, row, column++, objectCordinates[1], NULL);
+    //cout << std::fixed << "\n lat2: " << objectCordinates[0] << " |  long 2 :" << objectCordinates[1];
+    //cout << "\n ------------ ";
+    //object and camera cordinates in degrees
+    const long double PI = 3.141592653589793238463;
+
+    long double objectLatDeg = objectCordinates[0] * (180 / PI);
+    long double objectLongDeg = objectCordinates[1] * (180 / PI);
+    worksheet_write_number(worksheet, row, column++, objectLatDeg, NULL);
+    worksheet_write_number(worksheet, row, column++, objectLongDeg, NULL);
     worksheet_write_number(worksheet, row, column++, cameraCordinates[0], NULL);
     worksheet_write_number(worksheet, row, column++, cameraCordinates[1], NULL);
-    worksheet_write_formula(worksheet, row, column++, "= C2 * (PI()/ 180)", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= D2 * (PI()/ 180)", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= ACOS( SIN(A2)*SIN(E2) + COS(A2)*COS(E2)*COS(F2-B2) ) * 6371", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= ATAN2(COS(E2) * SIN(A2) - SIN(E2) * COS(A2) * COS(B2 - F2),SIN(B2 - F2) * COS(A2))", NULL); 
-    worksheet_write_formula(worksheet, row, column++, "= H2*(180/PI())", NULL); 
-    worksheet_write_formula(worksheet, row, column++, "= MOD(I2+360,360)", NULL); 
-    worksheet_write_formula(worksheet, row, column++, "= IF((J2 + 42) < 360, J2 + 42, (J2 + 42) - 360)", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= IF((J2 - 42) > 0, J2 - 42, 360 + (J2 - 42))", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= K2 * (PI()/ 180)", NULL); 
-    worksheet_write_formula(worksheet, row, column++, "= L2 * (PI()/ 180)", NULL); 
-    worksheet_write_formula(worksheet, row, column++, "= COS(0.733038)", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= G2 / O2", NULL); 
-    worksheet_write_number(worksheet, row, column++, 6371, NULL);
-    worksheet_write_formula(worksheet, row, column++, "= ASIN(SIN(E2) * COS(P2 / Q2) + COS(E2) * SIN(P2 / Q2) * COS(M2))", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= F2 + ATAN2(COS(P2 / Q2) - SIN(E2) * SIN(R2), SIN(M2) * SIN(P2 / Q2) * COS(E2))", NULL);
-    worksheet_write_formula(worksheet, row, column++, "= ASIN(SIN(E2)*COS(P2/Q2) + COS(E2)*SIN(P2/Q2)*COS(N2))", NULL); 
-    worksheet_write_formula(worksheet, row, column++, "= F2 + ATAN2(COS(P2/Q2)-SIN(E2)*SIN(T2), SIN(N2)*SIN(P2/Q2)*COS(E2))", NULL); 
-    //=ACOS(SIN(T2) * SIN(R3) + COS(T2) * COS(R3) * COS(S3 - U2)) * 6371
-    //worksheet_write_formula(worksheet, row, column++, "= ACOS(SIN(R2) * SIN(T2) + COS(R2) * COS(T2) * COS(U2 - S2)) * 6371", NULL);
-    worksheet_write_formula(worksheet, row, column++, "=ACOS(SIN(T2) * SIN(R3) + COS(T2) * COS(R3) * COS(S3 - U2)) * 6371", NULL);
+
+    //change cordinates to radian
+    long double cam_lat, cam_long, obj_lat, obj_long, long1, long2, lat1, lat2;
+    int radius = 6371;
+
+    //convert coridnates to radian 
+    cam_lat = cameraCordinates[0] * (PI / 180);
+    cam_long = cameraCordinates[1] * (PI / 180);
+    obj_lat = objectCordinates[0]; 
+    obj_long = objectCordinates[1];
+    
+    //calculate Distance_Obj_Camera :  distance between object and camera
+    //Haversine formula : a = sin²(Δφ / 2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ / 2)
+    //  c = 2 ⋅ atan2(√a, √(1−a))
+    //  d = R ⋅ c
+    long double a = sin((obj_lat - cam_lat) / 2) * sin((obj_lat - cam_lat) / 2) + cos(cam_lat) * cos(obj_lat) * sin((obj_long - cam_long) / 2) * sin((obj_long - cam_long) / 2);
+    long double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    long double objectDistance = radius * c;
+
+    //bearing calculation
+    //Since atan2 returns values in the range -π ... +π (that is, -180° ... +180°), 
+    //to normalise the result to a compass bearing (in the range 0° ... 360°, with −ve values transformed into the range 180° ... 360°), 
+    //convert to degrees and then use (θ+360) % 360, where % is (floating point) modulo.
+    long double y = sin(obj_long - cam_long) * cos(obj_lat);
+    long double x = cos(cam_lat) * sin(obj_lat) - (sin(cam_lat) * cos(obj_lat) * cos(obj_long - cam_long));
+    long double bearing = atan2(y, x);
+    bearing = bearing * (180 / PI);
+    bearing = fmod(bearing + 360, 360);
+    long double bearing45Plus = (bearing + 42) < 360 ? (bearing + 42) : ((bearing + 42) - 360);
+    long double bearing45Minus = (bearing - 42) > 0 ? (bearing - 42) : (360 + (bearing - 42));
+    bearing45Plus = bearing45Plus * (PI / 180);
+    bearing45Minus = bearing45Minus * (PI / 180);
+
+    //calculate cosFOV and the side length of the FOV triangle = side/cos. 
+    long double cosFOV = cos(42 * (PI / 180));
+    long double sideFOVTriangle = objectDistance / cosFOV;
+
+    //calculating the end point cordinates for the given camera location. 
+    //we will usw both the bearings (45 + and 45- to find cordinates 1 and 2 )
+    //Formula:	φ2 = asin( sin φ1 ⋅ cos δ + cos φ1 ⋅ sin δ ⋅ cos θ )
+    //λ2 = λ1 + atan2(sin θ ⋅ sin δ ⋅ cos φ1, cos δ − sin φ1 ⋅ sin φ2)
+    //where	φ is latitude, λ is longitude, θ is the bearing(clockwise from north), δ is the angular distance d / R; d being the distance travelled, R the earth’s radius
+    //bearing 45+  
+    lat1 = asin(sin(cam_lat) * cos(objectDistance / radius) + cos(cam_lat) * sin(objectDistance / radius) * cos(bearing45Plus));
+    long1 = cam_long + atan2(sin(bearing45Plus) * sin(objectDistance / radius) * cos(cam_lat), cos(objectDistance / radius) - sin(cam_lat) * sin(lat1));
+    //bearing 45-  
+    lat2 = asin(sin(cam_lat) * cos(objectDistance / radius) + cos(cam_lat) * sin(objectDistance / radius) * cos(bearing45Minus));
+    long2 = cam_long + atan2(sin(bearing45Minus) * sin(objectDistance / radius) * cos(cam_lat), cos(objectDistance / radius) - sin(cam_lat) * sin(lat2));
+
+
+    //calculating FOV distance for the points 
+    //Haversine formula : a = sin²(Δφ / 2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ / 2)
+    //  c = 2 ⋅ atan2(√a, √(1−a))
+    //  d = R ⋅ c
+    a = sin((lat1 - lat2) / 2) * sin((lat1 - lat2) / 2) + cos(lat2) * cos(lat1) * sin((long1 - long2) / 2) * sin((long1 - long2) / 2);
+    c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    long double FOVDistance = radius * c;
+
+
+    long double lat1Deg = lat1 * (180 / PI);
+    long double long1Deg = long1 * (180 / PI);
+    long double lat2Deg = lat2 * (180 / PI);
+    long double long2Deg = long2 * (180 / PI);
+
+    worksheet_write_number(worksheet, row, column++, cam_lat, NULL);
+    worksheet_write_number(worksheet, row, column++, cam_long, NULL);
+    worksheet_write_number(worksheet, row, column++, objectDistance, NULL);
+    worksheet_write_number(worksheet, row, column++, bearing, NULL);
+    worksheet_write_number(worksheet, row, column++, bearing45Plus, NULL);
+    worksheet_write_number(worksheet, row, column++, bearing45Minus, NULL);
+    worksheet_write_number(worksheet, row, column++, cosFOV, NULL);
+    worksheet_write_number(worksheet, row, column++, sideFOVTriangle, NULL);
+    worksheet_write_number(worksheet, row, column++, radius, NULL);
+    worksheet_write_number(worksheet, row, column++, lat1Deg, NULL);
+    worksheet_write_number(worksheet, row, column++, long1Deg, NULL);
+    worksheet_write_number(worksheet, row, column++, lat2Deg, NULL);
+    worksheet_write_number(worksheet, row, column++, long2Deg, NULL);
+    worksheet_write_number(worksheet, row, column++, FOVDistance, NULL);
+
+    /*values in this vector:
+    vector<long double> oldValues(7, 0);
+    [0] setValues = 0 : default
+    [1] lastFOV
+    [2] lat1
+    [3] long1
+    [4] old bearing
+    [5] average OR
+    [6] average BR
+    [7] count
+    */
+
+    if (oldValues[0] == 0)
+    {
+        oldValues[1] = FOVDistance;
+        oldValues[2] = lat1;
+        oldValues[3] = long1;
+        oldValues[4] = bearing;
+        oldValues[0] = 1;
+    }
 
     if ((row % 2) == 0)
     {
-        worksheet_write_formula(worksheet, row, column++, "=(V2+V3)/2", NULL);
-        worksheet_write_formula(worksheet, row, column++, "= ACOS(SIN(R2) * SIN(T3) + COS(R2) * COS(T3) * COS(U3 - S2)) * 6371", NULL);
-        worksheet_write_formula(worksheet, row, column++, "= X3 / W3", NULL);
+        long double FOVaverage = (FOVDistance + oldValues[1]) / 2;
+        worksheet_write_number(worksheet, row, column++, FOVaverage, NULL);
+        long double bearingDifference = abs(bearing - oldValues[4]);
+        //cout << " \n\n bearing now = "<< bearing <<",  old = "<< oldValues[4]  <<"difference = " << bearing - oldValues[4];
+        //check to see if the bearing difference is greater than 300
+        if (bearingDifference >= 300)
+        {
+            //we need to modify the difference
+            bearingDifference = 360 - bearingDifference;
+        }
+        else if (bearingDifference < 0.01)
+        {
+            //cout << "true";
+            bearingDifference = 0;
+        }
+        worksheet_write_number(worksheet, row, column++, bearingDifference, NULL);
+
+        //overalp ratio calcuation. 
+        //calculating FOV distance for the points 
+        //Haversine formula : a = sin²(Δφ / 2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ / 2)
+        //  c = 2 ⋅ atan2(√a, √(1−a))
+        //  d = R ⋅ c
+        a = sin((oldValues[2] - lat2) / 2) * sin((oldValues[2] - lat2) / 2) + cos(lat2) * cos(oldValues[2]) * sin((oldValues[3] - long2) / 2) * sin((oldValues[3] - long2) / 2);
+        c = 2 * atan2(sqrt(a), sqrt(1 - a));
+        long double ORDistance = radius * c;
+        cout << "\n distance or: " << ORDistance;
+        cout << " \n calculatin OR between points: lat1: "<<lat2 * (180/PI)<<" LONG 1 = "<< long2 * (180 / PI);
+        cout << " \n calculatin OR between points: lat2: " << oldValues[2] * (180 / PI) << " LONG 2 = " << oldValues[3] * (180 / PI);
+        worksheet_write_number(worksheet, row, column++, ORDistance, NULL);
+        long double ORRatio = ORDistance / FOVaverage;
+        worksheet_write_number(worksheet, row, column++, ORRatio, NULL);
+        oldValues[5] += ORRatio;
+        oldValues[6] += bearingDifference;
+        oldValues[7]++;
+        oldValues[0] = 0;
     }
     else
     {
         worksheet_write_number(worksheet, row, column++, 0, NULL);
-        worksheet_write_number(worksheet, row, column++, 0, NULL); 
         worksheet_write_number(worksheet, row, column++, 0, NULL);
+        worksheet_write_number(worksheet, row, column++, 0, NULL);
+        worksheet_write_number(worksheet, row, column++, 0, NULL);
+
     }
 
     worksheet_write_string(worksheet, row, column++, cstr, NULL);
         
-        //increment the row counter. 
+    //increment the row counter. 
     row = row + 1;
 }
 
@@ -322,11 +453,7 @@ void addColumnName(lxw_worksheet* worksheet, int row, int column)
     worksheet_write_string(worksheet, row, column++, "Camera_Lat_radians", NULL);
     worksheet_write_string(worksheet, row, column++, "Camera_Long_radians", NULL);
     worksheet_write_string(worksheet, row, column++, "Distance_Obj_Camera", NULL);
-    worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Radians", NULL);
     worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Degrees", NULL);
-    worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Degrees_Positive", NULL);
-    worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Degrees_45_Plus", NULL);
-    worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Degrees_45_Minus", NULL);
     worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Radian_45_Plus", NULL);
     worksheet_write_string(worksheet, row, column++, "Bearing_C_O_Radian_45_Minus", NULL);
     worksheet_write_string(worksheet, row, column++, "COS(42)", NULL);
@@ -338,6 +465,7 @@ void addColumnName(lxw_worksheet* worksheet, int row, int column)
     worksheet_write_string(worksheet, row, column++, "Long2_Rad", NULL);
     worksheet_write_string(worksheet, row, column++, "Fanning_Distance", NULL);
     worksheet_write_string(worksheet, row, column++, "FD_Average", NULL);
+    worksheet_write_string(worksheet, row, column++, "Bearing Difference", NULL);
     worksheet_write_string(worksheet, row, column++, "Overlap_Distance", NULL);
     worksheet_write_string(worksheet, row, column++, "Overlap_Ratio", NULL);
     worksheet_write_string(worksheet, row, column++, "ImageName", NULL);
@@ -374,38 +502,58 @@ int main()
     if(objectType == 1)
     {
         //calculate bearing and ditance using the cordinates user provides.
-        objectPos.push_back(39.13876208);
-        objectPos.push_back(-84.51313786);
-        cameraPos.push_back(39.13876208);
-        cameraPos.push_back(-84.51303786);
+        objectPos.push_back(39.1387584);
+        objectPos.push_back(-84.5131208);
+        cameraPos.push_back(39.1387564);
+        cameraPos.push_back(-84.513037);
         calculateInitialBearingDistance(objectDistance, bearing, cameraPos, objectPos);
+        //house cordinates: 39.13876208, -84.51313786
     }
     else
     {
-        objectCordinates[0] = (39.130597 * (3.1415926535 / 180));
-        objectCordinates[1] = (-84.512752 * (3.1415926535 / 180));
+        objectCordinates[0] = (39.130962 * (3.1415926535 / 180));
+        objectCordinates[1] = (-84.5133262 * (3.1415926535 / 180));
     }
 
-    //39.130597, -84.512752
-
+    //Oscar Statue: 39.13095, -84.5134 --wrong
+    //oscarStatue: 39.130962, -84.5133262
+    //39.130597, -84.512752 : bearcat
     vector<long double> previousCordinates;
     vector<long double> previousObjectCordinates;
     string previousImage = " ";
-    int skip = 0;
+    int skip = 1;
+    int count = 0; 
+    int step = 0;
+    int parsedFiles = 0; 
+    int stepVal = 2;
 
     //we use for each loop to iterate all the sub files
     for (int i=2; i < listOfFiles.size(); i++)
     {
         string fileName = listOfFiles[i];
-        if(skip == 0)
+        if(count < skip)
         {
+            parsedFiles++;
             parseExifToXml(fileName, worksheet, objectCordinates, row, previousCordinates, previousImage, previousObjectCordinates);
-            skip = 0;
+            count++;
+            step = stepVal;
             continue;
         }
-        //cout << "\n Skipping: "<<fileName;
-        skip = skip - 1;
+        cout << "\n Skipping: "<<fileName;
+        cout << "\n count = " << count;
+        count = --step;
     }
+
+    cout << "\n \n \n ************* parsed files = " << parsedFiles;
+    worksheet_write_string(worksheet, row, column++, "Avg_OR", NULL);
+    long double ORAverage = oldValues[5] / oldValues[7];
+    worksheet_write_number(worksheet, row, column++, ORAverage, NULL);
+    worksheet_write_string(worksheet, row, column++, "Bearing_Difference_Average", NULL);
+    long double BearingDifferenceAverage = oldValues[6] / oldValues[7];
+    worksheet_write_number(worksheet, row, column++, BearingDifferenceAverage, NULL);
+
+    cout << "\n \n \n ************* \n Avg_OR = " << ORAverage;
+    cout << "\n \n \n ************* \n BearingDifferenceAverage = " << BearingDifferenceAverage;
 
     workbook_close(workbook);
     getchar();
