@@ -24,18 +24,18 @@
 #include <xlsxwriter.h>
 #include <math.h>
 
-using namespace std; 
+using namespace std;
 
 /************************************************************************
 workbook structure:
 It will hold the row, column, workbook name and worksheet informaiton
-This same struct object will be passed along in the functions needing 
+This same struct object will be passed along in the functions needing
 the workbook information.
 *************************************************************************
 struct WorkBook
 {
     int row;
-  
+
     lxw_workbook* workbook;
     lxw_worksheet* worksheet;
 
@@ -57,7 +57,10 @@ struct WorkBook
 //global params
 long double objectDistance = 0;
 long double bearing = 0;
-int objectType = 1; 
+int objectType = 1;
+//anticlockwise / anticlock straight = 0;
+//clockwise, 1
+int direction = 1;
 //1: straight path
 //2: circular path
 vector<long double> oldValues(8, 0);
@@ -83,7 +86,7 @@ Will not work otherwise. :')
 For circular paths (ideal scenario), the center will be treated as obj
 location for all cases. (Hope user fly's the UAV in circular path.)
 ************************************************************************/
-void calculateInitialBearingDistance(long double &objectDistance, long double &bearing, vector<long double> cameraPos, vector<long double> objectPos)
+void calculateInitialBearingDistance(long double& objectDistance, long double& bearing, vector<long double> cameraPos, vector<long double> objectPos)
 {
     long double lat1, lat2, long1, long2;
     const long double PI = 3.141592653589793238463;
@@ -103,17 +106,19 @@ void calculateInitialBearingDistance(long double &objectDistance, long double &b
     long double c = 2 * atan2(sqrt(a), sqrt(1 - a));
     //cout << "\n calculated distance = " << radius * c;
     objectDistance = radius * c;
-    //cout << " objectDistance = " << objectDistance;
+    cout << " objectDistance = " << objectDistance;
 
     //bearing calculation
     long double y = sin(long2 - long1) * cos(lat2);
     long double x = cos(lat1) * sin(lat2) - (sin(lat1) * cos(lat2) * cos(long2 - long1));
     bearing = atan2(y, x);
-    //cout << "\n bearing = " << bearing;
+
     bearing = bearing * (180 / PI);
-    bearing = fmod(bearing+360, 360);
+    bearing = fmod(bearing + 360, 360);
+    cout << "\n bearing = " << bearing;
+    //changing it back to radians
     bearing = bearing * (PI / 180);
-    //cout << " \n changed bearing = " << bearing;
+    //cout << "\n ---------------------- \n changed bearing = " << bearing;
 }
 
 /*******************************************************************
@@ -134,7 +139,7 @@ void calculateObjectCordinates(vector<long double>& objectCordinates, vector<lon
     //cout << "\n objectDistance = " << objectDistance;
     //cout << " \n bearing = " << bearing;
     //cout << " \n lat1: " << cameraCordinates[0] << " long1: " << cameraCordinates[1];
-    
+
     lat2 = asin(sin(lat1) * cos(objectDistance / radius) + cos(lat1) * sin(objectDistance / radius) * cos(bearing));
     long2 = long1 + atan2(sin(bearing) * sin(objectDistance / radius) * cos(lat1), cos(objectDistance / radius) - sin(lat1) * sin(lat2));
 
@@ -143,9 +148,9 @@ void calculateObjectCordinates(vector<long double>& objectCordinates, vector<lon
 
     lat2 = lat2 * (180 / PI);
     long2 = long2 * (180 / PI);
-    //cout << std::fixed <<"\n lat2: " << lat2 << " |  long 2 :" << long2;
+    cout << std::fixed << "\n ******************************* lat2: " << lat2 << " |  long 2 :" << long2 << "\n *********************************************";
     //cout<<std::fixed<< "\n lat2: " << lat2 * (PI / 180) << " |  long 2 :" << long2 * (PI / 180);
-    
+
 }
 
 
@@ -179,9 +184,9 @@ void writeToXls(lxw_worksheet* worksheet, vector<long double>& objectCordinates,
     //convert coridnates to radian 
     cam_lat = cameraCordinates[0] * (PI / 180);
     cam_long = cameraCordinates[1] * (PI / 180);
-    obj_lat = objectCordinates[0]; 
+    obj_lat = objectCordinates[0];
     obj_long = objectCordinates[1];
-    
+
     //calculate Distance_Obj_Camera :  distance between object and camera
     //Haversine formula : a = sin²(Δφ / 2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ / 2)
     //  c = 2 ⋅ atan2(√a, √(1−a))
@@ -201,8 +206,10 @@ void writeToXls(lxw_worksheet* worksheet, vector<long double>& objectCordinates,
     bearing = fmod(bearing + 360, 360);
     long double bearing45Plus = (bearing + 42) < 360 ? (bearing + 42) : ((bearing + 42) - 360);
     long double bearing45Minus = (bearing - 42) > 0 ? (bearing - 42) : (360 + (bearing - 42));
+
     bearing45Plus = bearing45Plus * (PI / 180);
     bearing45Minus = bearing45Minus * (PI / 180);
+
 
     //calculate cosFOV and the side length of the FOV triangle = side/cos. 
     long double cosFOV = cos(42 * (PI / 180));
@@ -265,8 +272,18 @@ void writeToXls(lxw_worksheet* worksheet, vector<long double>& objectCordinates,
     if (oldValues[0] == 0)
     {
         oldValues[1] = FOVDistance;
-        oldValues[2] = lat1;
-        oldValues[3] = long1;
+
+        if (direction == 0)
+        {
+            oldValues[2] = lat1;
+            oldValues[3] = long1;
+        }
+        else
+        {
+            oldValues[2] = lat2;
+            oldValues[3] = long2;
+        }
+
         oldValues[4] = bearing;
         oldValues[0] = 1;
     }
@@ -295,12 +312,23 @@ void writeToXls(lxw_worksheet* worksheet, vector<long double>& objectCordinates,
         //Haversine formula : a = sin²(Δφ / 2) + cos φ1 ⋅ cos φ2 ⋅ sin²(Δλ / 2)
         //  c = 2 ⋅ atan2(√a, √(1−a))
         //  d = R ⋅ c
+
+        if (direction == 1)
+        {
+            long double lat2Var = lat2;
+            long double long2Var = long2;
+            lat2 = lat1;
+            long2 = long1;
+            lat1 = lat2Var;
+            long1 = long2Var;
+        }
+
         a = sin((oldValues[2] - lat2) / 2) * sin((oldValues[2] - lat2) / 2) + cos(lat2) * cos(oldValues[2]) * sin((oldValues[3] - long2) / 2) * sin((oldValues[3] - long2) / 2);
         c = 2 * atan2(sqrt(a), sqrt(1 - a));
         long double ORDistance = radius * c;
-        cout << "\n distance or: " << ORDistance;
-        cout << " \n calculatin OR between points: lat1: "<<lat2 * (180/PI)<<" LONG 1 = "<< long2 * (180 / PI);
-        cout << " \n calculatin OR between points: lat2: " << oldValues[2] * (180 / PI) << " LONG 2 = " << oldValues[3] * (180 / PI);
+        //cout << "\n distance or: " << ORDistance;
+        //cout << " \n calculatin OR between points: lat1: "<<lat2 * (180/PI)<<" LONG 1 = "<< long2 * (180 / PI);
+        //cout << " \n calculatin OR between points: lat2: " << oldValues[2] * (180 / PI) << " LONG 2 = " << oldValues[3] * (180 / PI);
         worksheet_write_number(worksheet, row, column++, ORDistance, NULL);
         long double ORRatio = ORDistance / FOVaverage;
         worksheet_write_number(worksheet, row, column++, ORRatio, NULL);
@@ -319,7 +347,7 @@ void writeToXls(lxw_worksheet* worksheet, vector<long double>& objectCordinates,
     }
 
     worksheet_write_string(worksheet, row, column++, cstr, NULL);
-        
+
     //increment the row counter. 
     row = row + 1;
 }
@@ -331,27 +359,27 @@ This function will get the camera location from exif file and parse it to
 get the camera locations. It will not perform extraction on meta data.
 The input file is assumed to be in exif format.
 *************************************************************************/
-void parseExifToXml(string fileName, lxw_worksheet* worksheet, vector<long double> &objectCordinates, int& row, vector<long double> &previousCameraCordinates, string &previousImage, vector<long double>& previousObjectCordinates)
+void parseExifToXml(string fileName, lxw_worksheet* worksheet, vector<long double>& objectCordinates, int& row, vector<long double>& previousCameraCordinates, string& previousImage, vector<long double>& previousObjectCordinates)
 {
     //fstream object
     fstream file;
     string latitude = "latitude";
     string longitude = "longitude";
     string word, previousWord = "hello";
-    
+
     string imageName = fileName;
 
     if (fileName.length() >= 32)
     {
         imageName = fileName.substr(20, 25);
     }
-   
-  
+
+
     if (((row % 2) != 0) && (previousCameraCordinates.size() > 0))
     {
         writeToXls(worksheet, previousObjectCordinates, previousCameraCordinates, row, previousImage);
     }
-   
+
     // opening file.
     file.open(fileName.c_str());
 
@@ -384,31 +412,31 @@ void parseExifToXml(string fileName, lxw_worksheet* worksheet, vector<long doubl
                 found = previousWord.find(longitude);
                 if (found != string::npos)
                 {
-                     long double cameraLong = std::stod(word);
-                     cameraCordinates.push_back(cameraLong);
+                    long double cameraLong = std::stod(word);
+                    cameraCordinates.push_back(cameraLong);
 
-                     //find the object cords in case of straight path 
-                     if (objectType == 1)
-                     {
-                         //cout <<std::fixed<< " \n before called : lat1: " << cameraCordinates[0] << "  long 1 : " << cameraCordinates[1];
-                         calculateObjectCordinates(objectCordinates, cameraCordinates, objectDistance, bearing);
-                     }
-                     if ((row % 2) == 0)
-                     {
-                         previousCameraCordinates = cameraCordinates;
-                         previousObjectCordinates = objectCordinates;
-                         previousImage = imageName;
-                     }
-                     //
-                     writeToXls(worksheet, objectCordinates, cameraCordinates, row, imageName);
-                     //break the loop, work done.
-                     break;
+                    //find the object cords in case of straight path 
+                    if (objectType == 1)
+                    {
+                        //cout <<std::fixed<< " \n before called : lat1: " << cameraCordinates[0] << "  long 1 : " << cameraCordinates[1];
+                        calculateObjectCordinates(objectCordinates, cameraCordinates, objectDistance, bearing);
+                    }
+                    if ((row % 2) == 0)
+                    {
+                        previousCameraCordinates = cameraCordinates;
+                        previousObjectCordinates = objectCordinates;
+                        previousImage = imageName;
+                    }
+                    //
+                    writeToXls(worksheet, objectCordinates, cameraCordinates, row, imageName);
+                    //break the loop, work done.
+                    break;
                 }
             }
             //update the previous word
             previousWord = word;
         }
-    }  
+    }
 }
 
 
@@ -426,14 +454,13 @@ void readDirectory(string dirName, vector<string>& listOfFiles)
 
     WIN32_FIND_DATAA data;
     HANDLE hFind;
-    if ((hFind = FindFirstFileA(dirNameTemp.c_str(), &data)) != INVALID_HANDLE_VALUE) 
+    if ((hFind = FindFirstFileA(dirNameTemp.c_str(), &data)) != INVALID_HANDLE_VALUE)
     {
         do
         {
-            listOfFiles.push_back(dirName+"\\"+data.cFileName);
+            listOfFiles.push_back(dirName + "\\" + data.cFileName);
             cout << "\n FileName: " << dirName + "\\" + data.cFileName;
-        } 
-        while (FindNextFileA(hFind, &data) != 0);
+        } while (FindNextFileA(hFind, &data) != 0);
         FindClose(hFind);
     }
 }
@@ -443,7 +470,7 @@ void readDirectory(string dirName, vector<string>& listOfFiles)
 Function: addColumNames()
 Will add the required column names for calculation based on the case
 ****************************************************************************/
-void addColumnName(lxw_worksheet* worksheet, int row, int column) 
+void addColumnName(lxw_worksheet* worksheet, int row, int column)
 {
     //populate the column names.
     worksheet_write_string(worksheet, row, column++, "Object_Lat", NULL);
@@ -490,24 +517,23 @@ int main()
     int row = 0;
     lxw_workbook* workbook = workbook_new("C:\\Aishvarya\\Sample\\Overlap_Calculation.xlsx");
     lxw_worksheet* worksheet = workbook_add_worksheet(workbook, "Overlap_Calculation");
-    
+
     addColumnName(worksheet, row, column);
     row++;
 
     //vector to store the cordinates of object
-    vector<long double> objectCordinates(2,0);
+    vector<long double> objectCordinates(2, 0);
     vector<long double> cameraPos;
     vector<long double> objectPos;
 
-    if(objectType == 1)
+    if (objectType == 1)
     {
         //calculate bearing and ditance using the cordinates user provides.
-        objectPos.push_back(39.1387584);
-        objectPos.push_back(-84.5131208);
-        cameraPos.push_back(39.1387564);
-        cameraPos.push_back(-84.513037);
+        objectPos.push_back(39.1388569);
+        objectPos.push_back(-84.5131159);
+        cameraPos.push_back(39.13885686);
+        cameraPos.push_back(-84.51301833);
         calculateInitialBearingDistance(objectDistance, bearing, cameraPos, objectPos);
-        //house cordinates: 39.13876208, -84.51313786
     }
     else
     {
@@ -515,23 +541,32 @@ int main()
         objectCordinates[1] = (-84.5133262 * (3.1415926535 / 180));
     }
 
-    //Oscar Statue: 39.13095, -84.5134 --wrong
+
     //oscarStatue: 39.130962, -84.5133262
     //39.130597, -84.512752 : bearcat
     vector<long double> previousCordinates;
     vector<long double> previousObjectCordinates;
     string previousImage = " ";
+
+    /*********************************************************************
+    stepVal and skip play an important role in variying the database
+    Skip: defines the number of images you want to consider between two images.
+    step: defines the number of images you skip between two images.
+    ex: skip = 1 will have half of dataset
+    start with skip = max number, then keep on decreasing till 1.
+    then start increasing stepval (less than half of total number of images).
+    ***********************************************************************/
     int skip = 1;
-    int count = 0; 
+    int count = 0;
     int step = 0;
-    int parsedFiles = 0; 
-    int stepVal = 2;
+    int parsedFiles = 0;
+    int stepVal = 7;
 
     //we use for each loop to iterate all the sub files
-    for (int i=2; i < listOfFiles.size(); i++)
+    for (int i = 2; i < listOfFiles.size(); i++)
     {
         string fileName = listOfFiles[i];
-        if(count < skip)
+        if (count < skip)
         {
             parsedFiles++;
             parseExifToXml(fileName, worksheet, objectCordinates, row, previousCordinates, previousImage, previousObjectCordinates);
@@ -539,8 +574,9 @@ int main()
             step = stepVal;
             continue;
         }
-        cout << "\n Skipping: "<<fileName;
+        cout << "\n\n \n \n  Skipping: " << fileName;
         cout << "\n count = " << count;
+        cout << "\n\n\n\n\n";
         count = --step;
     }
 
